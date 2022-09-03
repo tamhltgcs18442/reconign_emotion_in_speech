@@ -7,11 +7,12 @@ from scipy.io import wavfile
 import time
 import numpy as np
 import pickle
-# import sounddevice as sd
-# import soundfile
+import sounddevice as sd
+import soundfile
 from scipy.io.wavfile import write
 from python_speech_features import mfcc
 
+import keras
 from keras.models import Sequential, model_from_json
 
 
@@ -87,19 +88,19 @@ def recording():
     
     
 
-    # myrecording = sd.rec(int(seconds * fs), samplerate=fs, channels=2)
+    myrecording = sd.rec(int(seconds * fs), samplerate=fs, channels=2)
     
-    # sd.wait()
+    sd.wait()
     # progress_bar_status = st.progress(0) 
     # for i in range(0, seconds):
     #     time.sleep(0.01)
     #     progress_bar_status.progress(i/seconds)
  # Wait until recording is finished
-    # write(WAVE_OUTPUT_FILENAME, fs, myrecording) 
+    write(WAVE_OUTPUT_FILENAME, fs, myrecording) 
     
-    # # st.success("Success record audio file")
-    # change_audio_state(WAVE_OUTPUT_FILENAME)
-    # change_audio_upload_state()
+    # st.success("Success record audio file")
+    change_audio_state(WAVE_OUTPUT_FILENAME)
+    change_audio_upload_state()
     
 def load_result_record():
     
@@ -120,7 +121,7 @@ def load_result_record():
     st.metric(label="Your file", value=st.session_state.audio, delta="sampling_rate : " + str(sampling_rate), delta_color="normal")
     st.write(fig)
     st.audio(data=st.session_state.audio, format="audio/wav")
-    st.write(data)
+    # st.write(data)
     
 def loaded_model():
     json_file = open('model_json.json', 'r')
