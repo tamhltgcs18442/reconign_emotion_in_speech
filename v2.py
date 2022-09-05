@@ -13,28 +13,44 @@ import os
 import matplotlib.pyplot as plt
 from PIL import Image
 import cv2
-from tensorflow.python.keras.models import load_model
+from tensorflow.python.keras.models import load_model, model_from_json, optimizer_v1, Sequential
+from tensorflow.python.keras.layers import Conv1D, MaxPooling1D, Activation, Flatten, Dropout, Dense
+from keras.layers.normalization.batch_normalization import BatchNormalization
 
 st.set_page_config(page_title="SER web-app", page_icon=":speech_balloon:", layout="wide")
 
-model = load_model("Emotion_Model.h5")
+# infile = open('labels','rb')
+# lb = ['female_angry', 'female_disgust', 'female_fear', 'female_happy', 'female_neutral', 'female_sad', 'female_surprise', 'male_angry', 'male_disgust', 'male_fear', 'male_happy', 'male_neutral', 'male_sad', 'male_surprise']
+# infile.close()
+
+model = load_model("saved_models/Emotion_Model.h5")
 
 CAT6 = ['fear', 'angry', 'neutral', 'happy', 'sad', 'surprise']
 CAT7 = ['fear', 'disgust', 'neutral', 'happy', 'sad', 'surprise', 'angry']
 CAT3 = ["positive", "neutral", "negative"]
+CAT14 = ['female_angry', 'female_disgust', 'female_fear', 'female_happy', 'female_neutral', 'female_sad', 'female_surprise', 'male_angry', 'male_disgust', 'male_fear', 'male_happy', 'male_neutral', 'male_sad', 'male_surprise']
 
 TEST_CAT = ['fear', 'disgust', 'neutral', 'happy', 'sad', 'surprise', 'angry']
 TEST_PRED = np.array([.3, .3, .4, .1, .6, .9, .1])
 
-COLOR_DICT = {"neutral": "grey",
-              "positive": "green",
-              "happy": "green",
-              "surprise": "orange",
-              "fear": "purple",
-              "negative": "red",
-              "angry": "red",
-              "sad": "lightblue",
-              "disgust": "brown"}
+COLOR_DICT = {"female_neutral": "grey",
+              "female_positive": "green",
+              "female_happy": "green",
+              "female_surprise": "orange",
+              "female_fear": "purple",
+              "female_negative": "red",
+              "female_angry": "red",
+              "female_sad": "lightblue",
+              "female_disgust": "brown",
+              "male_neutral": "grey",
+              "male_positive": "green",
+              "male_happy": "green",
+              "male_surprise": "orange",
+              "male_fear": "purple",
+              "male_negative": "red",
+              "male_angry": "red",
+              "male_sad": "lightblue",
+              "male_disgust": "brown"}
 
 def getDateTimeNow():
     return datetime.now().strftime("%d-%m-%Y %H:%M:%S")
@@ -79,15 +95,28 @@ def get_melspec(audio):
     rgbImage = np.repeat(grayImage[..., np.newaxis], 3, -1)
     return (rgbImage, Xdb)
 
-def get_mfccs(audio, limit):
-    y, sr = librosa.load(audio)
-    a = librosa.feature.mfcc(y, sr=sr, n_mfcc=40)
-    if a.shape[1] > limit:
-        mfccs = a[:, :limit]
-    elif a.shape[1] < limit:
-        mfccs = np.zeros((a.shape[0], limit))
-        mfccs[:, :a.shape[1]] = a
-    return mfccs
+def get_mfccs(audio):
+    X, sample_rate = librosa.load(audio
+                              ,res_type='kaiser_fast'
+                              ,duration=2.5
+                              ,sr=44100*2
+                              ,offset=0.5
+                             )
+    sample_rate = np.array(sample_rate)
+    mfccs = np.mean(librosa.feature.mfcc(y=X, sr=sample_rate, n_mfcc=13),axis=0)
+    newdf = pd.DataFrame(data=mfccs).T
+    newdf= np.expand_dims(newdf, axis=2)
+    
+    # a = librosa.feature.mfcc(y, sr=sr, n_mfcc=13)
+    # mfccs = np.mean(a, axis=0)
+    # if a.shape[1] > limit:
+    #     mfccs = a[:, :limit]
+    # elif a.shape[1] < limit:
+    #     mfccs = np.zeros((a.shape[0], limit))
+    #     mfccs[:, :a.shape[1]] = a
+    # df = pd.DataFrame(data=mfccs).T
+    # result = np.expand_dims(df, axis=2)
+    return newdf
 
 
 @st.cache
@@ -134,7 +163,17 @@ def color_dict(coldict=COLOR_DICT):
 #     plt.subplots_adjust(top=0.75)
 
 ## =====================================
+# def convert_predict(predict):
+#     filename = 'labels'
+#     infile = open(filename,'rb')
+#     lb = pickle.load(infile)
+#     infile.close()
 
+#     # Get the final predicted label
+#     final = newpred.argmax(axis=1)
+#     final = final.astype(int).flatten()
+#     final = (lb.inverse_transform((final)))
+    
 def plot_colored_polar(fig, predictions, categories,
                         title="", colors=COLOR_DICT):
     N = len(predictions)
@@ -177,16 +216,17 @@ def plot_colored_polar(fig, predictions, categories,
 ## =====================================
     
 def main():
-    side_image = Image.open()
-    with st.sidebar:
-        st.image(side_image, width=300)
+    # func_load_model()
+    # side_image = Image.open()
+    # with st.sidebar:
+        # st.image(side_image, width=300)
     st.sidebar.subheader("Menu")
     website_menu = st.sidebar.selectbox("Menu", ("Emotion Recognition", "About my project"))
     st.set_option('deprecation.showfileUploaderEncoding', False)
     
     if website_menu == "Emotion Recognition":
         st.sidebar.subheader("Model")
-        model_type = st.sidebar.selectbox("Which type of present do you like?", ("mfccs"))
+        model_type = st.sidebar.selectbox("Which type of present do you like?", ("mfccs", ""))
         em3 = em6 = em7 = gender = False
         st.sidebar.subheader("Setting")
         st.markdown("## Upload the file")
@@ -278,66 +318,67 @@ def main():
                 st.markdown("## Predictions")
                 with st.container():
                     col1, col2, col3, col4 = st.columns(4)
-                    mfccs = get_mfccs(path, model.input_shape[-1])
-                    mfccs = mfccs.reshape(1, *mfccs.shape)
-                    pred = model.predict(mfccs)[0]
+                    # mfccs = get_mfccs(path, model.input_shape[-1])
+                    # mfccs = mfccs.reshape(1, *mfccs.shape)
+                    # pred = model.predict(mfccs)[0]
                     
-                    with col1: 
-                        if em3:
-                            pos = pred[3] + pred[5] * .5
-                            neu = pred[2] + pred[5] * .5 + pred[4] * .5
-                            neg = pred[0] + pred[1] + pred[4] * .5
-                            data3 = np.array([pos, neu, neg])
-                            txt = "MFCCs\n" + get_title(data3, CAT3)
-                            fig = plt.figure(figsize=(5, 5))
-                            COLORS = color_dict(COLOR_DICT)
-                            plot_colored_polar(fig, predictions=data3, categories=CAT3,
-                                               title=txt, colors=COLORS)
-                            # plot_polar(fig, predictions=data3, categories=CAT3,
-                            # title=txt, colors=COLORS)
-                            st.write(fig)
-                    with col2:
-                        if em6:
-                            txt = "MFCCs\n" + get_title(pred, CAT6)
-                            fig2 = plt.figure(figsize=(5, 5))
-                            COLORS = color_dict(COLOR_DICT)
-                            plot_colored_polar(fig2, predictions=pred, categories=CAT6,
-                                               title=txt, colors=COLORS)
-                            # plot_polar(fig2, predictions=pred, categories=CAT6,
-                            #            title=txt, colors=COLORS)
-                            st.write(fig2)
+                    # with col1: 
+                    #     if em3:
+                    #         pos = pred[3] + pred[5] * .5
+                    #         neu = pred[2] + pred[5] * .5 + pred[4] * .5
+                    #         neg = pred[0] + pred[1] + pred[4] * .5
+                    #         data3 = np.array([pos, neu, neg])
+                    #         txt = "MFCCs\n" + get_title(data3, CAT3)
+                    #         fig = plt.figure(figsize=(5, 5))
+                    #         COLORS = color_dict(COLOR_DICT)
+                    #         plot_colored_polar(fig, predictions=data3, categories=CAT3,
+                    #                            title=txt, colors=COLORS)
+                    #         # plot_polar(fig, predictions=data3, categories=CAT3,
+                    #         # title=txt, colors=COLORS)
+                    #         st.write(fig)
+                    # with col2:
+                    #     if em6:
+                    #         txt = "MFCCs\n" + get_title(pred, CAT6)
+                    #         fig2 = plt.figure(figsize=(5, 5))
+                    #         COLORS = color_dict(COLOR_DICT)
+                    #         plot_colored_polar(fig2, predictions=pred, categories=CAT6,
+                    #                            title=txt, colors=COLORS)
+                    #         # plot_polar(fig2, predictions=pred, categories=CAT6,
+                    #         #            title=txt, colors=COLORS)
+                    #         st.write(fig2)
                     with col3:
                         if em7:
-                            model_ = load_model("model4.h5")
-                            mfccs_ = get_mfccs(path, model_.input_shape[-2])
-                            mfccs_ = mfccs_.T.reshape(1, *mfccs_.T.shape)
-                            pred_ = model_.predict(mfccs_)[0]
-                            txt = "MFCCs\n" + get_title(pred_, CAT7)
+                            model_ = model
+                            mfccs_ = get_mfccs(path)
+                            # mfccs_ = mfccs_.T.reshape(1, *mfccs_.T.shape)
+                            pred_ = model_.predict(mfccs_, batch_size=16, verbose=1)[0]
+                            st.write(pred_)
+                            txt = "MFCCs\n" + get_title(pred_, CAT14)
                             fig3 = plt.figure(figsize=(5, 5))
                             COLORS = color_dict(COLOR_DICT)
-                            plot_colored_polar(fig3, predictions=pred_, categories=CAT7,
+                            plot_colored_polar(fig3, predictions=pred_, categories=CAT14,
                                                title=txt, colors=COLORS)
                             # plot_polar(fig3, predictions=pred_, categories=CAT7,
                             #            title=txt, colors=COLORS)
                             st.write(fig3)
-                    with col4:
-                        if gender:
-                            with st.spinner('Wait for it...'):
-                                gmodel = load_model("model_mw.h5")
-                                gmfccs = get_mfccs(path, gmodel.input_shape[-1])
-                                gmfccs = gmfccs.reshape(1, *gmfccs.shape)
-                                gpred = gmodel.predict(gmfccs)[0]
-                                gdict = [["female", "woman.png"], ["male", "man.png"]]
-                                ind = gpred.argmax()
-                                txt = "Predicted gender: " + gdict[ind][0]
-                                img = Image.open("images/" + gdict[ind][1])
+                    # with col4:
+                    #     if gender:
+                    #         with st.spinner('Wait for it...'):
+                    #             gmodel = load_model("model_mw.h5")
+                    #             gmfccs = get_mfccs(path, gmodel.input_shape[-1])
+                    #             gmfccs = gmfccs.reshape(1, *gmfccs.shape)
+                    #             gpred = gmodel.predict(gmfccs)[0]
+                    #             gdict = [["female", "woman.png"], ["male", "man.png"]]
+                    #             ind = gpred.argmax()
+                    #             txt = "Predicted gender: " + gdict[ind][0]
+                    #             img = Image.open("images/" + gdict[ind][1])
 
-                                fig4 = plt.figure(figsize=(3, 3))
-                                fig4.set_facecolor('#d1d1e0')
-                                plt.title(txt)
-                                plt.imshow(img)
-                                plt.axis("off")
-                                st.write(fig4)
+                    #             fig4 = plt.figure(figsize=(3, 3))
+                    #             fig4.set_facecolor('#d1d1e0')
+                    #             plt.title(txt)
+                    #             plt.imshow(img)
+                    #             plt.axis("off")
+                    #             st.write(fig4)
     elif website_menu == "Our team":
         st.subheader("Our team")
         st.balloons()
@@ -357,5 +398,6 @@ def main():
                         unsafe_allow_html=True)
     else:
         st.header("Thank you for coming to my website")
-                                
-                                
+        
+if __name__ == '__main__':
+    main()
