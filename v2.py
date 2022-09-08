@@ -13,20 +13,19 @@ import os
 import matplotlib.pyplot as plt
 from PIL import Image
 import cv2
-from tensorflow.python.keras.models import load_model, model_from_json, optimizer_v1, Sequential
-from tensorflow.python.keras.layers import Conv1D, MaxPooling1D, Activation, Flatten, Dropout, Dense
-from keras.layers.normalization.batch_normalization import BatchNormalization
+from tensorflow.python.keras.models import load_model, model_from_json, Sequential
 
 st.set_page_config(page_title="SER web-app", page_icon=":speech_balloon:", layout="wide")
 
-# infile = open('labels','rb')
-# lb = ['female_angry', 'female_disgust', 'female_fear', 'female_happy', 'female_neutral', 'female_sad', 'female_surprise', 'male_angry', 'male_disgust', 'male_fear', 'male_happy', 'male_neutral', 'male_sad', 'male_surprise']
-# infile.close()
-
 model = load_model("saved_models/Emotion_Model.h5")
 
-CAT6 = ['fear', 'angry', 'neutral', 'happy', 'sad', 'surprise']
-CAT7 = ['fear', 'disgust', 'neutral', 'happy', 'sad', 'surprise', 'angry']
+CAT7 = ["angry",
+        "disgust",
+        "fear",
+        "happy",
+        "neutral",
+        "sad",
+        "surprise"]
 CAT3 = ["positive", "neutral", "negative"]
 CAT14 = ['female_angry', 
          'female_disgust', 
@@ -44,40 +43,59 @@ CAT14 = ['female_angry',
          'male_surprise']
 
 TEST_CAT = ['fear', 'disgust', 'neutral', 'happy', 'sad', 'surprise', 'angry']
-TEST_PRED = np.array([.3, .3, .4, .1, .6, .9, .1])
 
-COLOR_DICT = {"female_neutral": "grey",
-              "female_positive": "green",
-              "female_happy": "green",
-              "female_surprise": "orange",
-              "female_fear": "purple",
-              "female_negative": "red",
-              "female_angry": "red",
-              "female_sad": "lightblue",
-              "female_disgust": "brown",
-              "male_neutral": "grey",
-              "male_positive": "green",
-              "male_happy": "green",
-              "male_surprise": "orange",
-              "male_fear": "purple",
-              "male_negative": "red",
-              "male_angry": "red",
-              "male_sad": "lightblue",
-              "male_disgust": "brown"}
+# COLOR_DICT = {"female_neutral": "grey",
+#               "female_positive": "green",
+#               "female_happy": "green",
+#               "female_surprise": "orange",
+#               "female_fear": "purple",
+#               "female_negative": "red",
+#               "female_angry": "red",
+#               "female_sad": "lightblue",
+#               "female_disgust": "brown",
+#               "male_neutral": "grey",
+#               "male_positive": "green",
+#               "male_happy": "green",
+#               "male_surprise": "orange",
+#               "male_fear": "purple",
+#               "male_negative": "red",
+#               "male_angry": "red",
+#               "male_sad": "lightblue",
+#               "male_disgust": "brown"}
+
+COLOR_DICT_CAT3 = {"positive": "green",
+                   "neutral": "blue",
+                   "negative": "red"}
+
+COLOR_DICT_CAT7 = {"angry": "red",
+              "disgust": "purple",
+              "fear": "orange",
+              "happy": "yellow",
+              "neutral": "blue",
+              "sad": "grey",
+              "surprise": "green"}
 
 def getDateTimeNow():
     return datetime.now().strftime("%d-%m-%Y %H:%M:%S")
 
-# def log_file(txt=None):
-#     with open("log.txt", "a") as f:
-#         dateTimeNow = getDateTimeNow()
-#         f.write(f"{txt} - {dateTimeNow};\n")
+def log_file(txt=None):
+    with open("log.txt", "a") as f:
+        dateTimeNow = getDateTimeNow()
+        f.write(f"{txt} - {dateTimeNow};\n")
+        
+def get_filename():
+    dateTimeNow = getDateTimeNow()
+    filename = dateTimeNow + "-record"
+    return filename
+
+def recording():
+    return True
         
 def save_audio(file):
     if file.size > 4000000:
         return 1
     
-    folder = "record"
+    folder = "audio"
     dateTimeNow = getDateTimeNow()
     for filename in os.listdir(folder):
         file_path = os.path.join(folder, filename)
@@ -109,14 +127,14 @@ def get_melspec(audio):
     return (rgbImage, Xdb)
 
 def get_mfccs(audio):
-    X, sample_rate = librosa.load(audio
+    X, sampling_rate = librosa.load(audio
                               ,res_type='kaiser_fast'
                               ,duration=2.5
                               ,sr=44100*2
                               ,offset=0.5
                              )
-    sample_rate = np.array(sample_rate)
-    mfccs = np.mean(librosa.feature.mfcc(y=X, sr=sample_rate, n_mfcc=13),axis=0)
+    sampling_rate = np.array(sampling_rate)
+    mfccs = np.mean(librosa.feature.mfcc(y=X, sr=sampling_rate, n_mfcc=13),axis=0)
     newdf = pd.DataFrame(data=mfccs).T
     newdf= np.expand_dims(newdf, axis=2)
     return newdf
@@ -128,65 +146,75 @@ def get_title(predictions, categories="001"):
     return title
 
 @st.cache
-def color_dict(coldict=COLOR_DICT):
+def color_dict(COLOR_DICT):
     return COLOR_DICT
 
-# @st.cache
-# def plot_polar(fig, predictions=TEST_PRED, categories=TEST_CAT,
-#                title="TEST", colors=COLOR_DICT):
-#     N = len(predictions)
-#     ind = predictions.argmax()
-    
-#     COLOR = color_sector = colors[categories[ind]]
-#     theta = np.linspace(0.0, 2*np.pi, N , endpoint=False)
-#     radii = np.zeros_like(predictions)
-#     radii[predictions.argmax()] = predictions.max() *10
-#     width = np.pi / 1.8 * predictions
-#     fig.set_facecolor("#d1d1e0")
-#     ax = plt.subplot(111, polar="True")
-#     ax.bar(theta, radii, width=width, bottom=0.0, color=color_sector, alpha=0.25)
-    
-#     angles = [i / float(N) * 2 * np.pi for i in range(N)]
-#     angles += angles[:1]
-    
-#     data = list(predictions)
-#     data += data[:1]
-#     plt.polar(angles, data, colors= COLOR, linewidth = 2)
-#     plt.fill(angles, data, facecolor=COLOR, alpha=0.25)
-    
-#     ax.spines['polar'].set_color('lightgrey')
-#     ax.set_theta_offset(np.pi / 3)
-#     ax.set_theta_direction(-1)
-#     plt.xticks(angles[:-1], categories)
-#     ax.set_rlabel_position(0)
-#     plt.yticks([0, .25, .5, .75, 1], color="grey", size=8)
-#     plt.suptitle(title, color="darkblue", size=12)
-#     plt.title(f"BIG {N}\n", color=COLOR)
-#     plt.ylim(0, 1)
-#     plt.subplots_adjust(top=0.75)
-
 ## =====================================
-def convert_predict(predictions, categories):
-    N = len(predictions)
-    ind = predictions.argmax()
-    
+def convert_data_list(predictions, categories):    
     dataList = np.array([])
     
     if len(categories) == 3:
-        pos = predictions[3] + predictions[6] + predictions[10] + predictions[13]
-        neu = predictions[4] + predictions[11]
-        neg = predictions[0] + predictions[1] + predictions[2] + predictions[5] + predictions[7] + predictions[8] + predictions[9] + predictions[12]
-        dataList =np.array([pos, neu, neg])
-    # if len(categories) == 7:
+        positive = predictions[3] + predictions[6] + predictions[10] + predictions[13]
+        neutral = predictions[4] + predictions[11]
+        negative = predictions[0] + predictions[1] + predictions[2] + predictions[5] + predictions[7] + predictions[8] + predictions[9] + predictions[12]
+        dataList =np.array([positive, neutral, negative])
+    if len(categories) == 7:
+        angry = predictions[0] + predictions[7]
+        disgust = predictions[1] + predictions[8]
+        fear = predictions[2] + predictions[9]
+        happy = predictions[3] + predictions[10]
+        neutral = predictions[4] + predictions[11]
+        sad = predictions[5] + predictions[12]
+        surprise = predictions[6] + predictions[13]
+        
+        dataList =np.array([angry, disgust, fear, happy, neutral, sad, surprise])
     return dataList
+
+def convert_result(predictions, categories):
+    # N = len(predictions)
+    ind = predictions.argmax()
+    result = -1
+    if len(categories) == 3:
+        positive = [3, 6, 10, 13]
+        neutral = [4, 11]
+        negative = [0, 1, 2, 5, 7, 8, 9, 12]
+        if ind in positive:
+            result = 0
+        if ind in neutral:
+            result = 1 
+        if ind in negative:
+            result = 2  
+    if len(categories) == 7:
+        angry = [0, 7]
+        disgust = [1, 8]
+        fear = [2, 9]
+        happy = [3, 10]
+        neutral = [4, 11]
+        sad = [5, 12]
+        surprise = [6, 13]
+        if ind in angry:
+            result = 0
+        if ind in disgust:
+            result = 1
+        if ind in fear:
+            result = 2
+        if ind in happy:
+            result = 3
+        if ind in neutral:
+            result = 4
+        if ind in sad:
+            result = 5
+        if ind in surprise:
+            result = 6 
+    return (result, len(categories))
         
 
 st.cache(allow_output_mutation=True)    
 def plot_colored_polar(fig, predictions, categories,
-                        title="", colors=COLOR_DICT):
+                        title="", colors=COLOR_DICT_CAT7):
     
     N = len(predictions)
-    ind = predictions.argmax()
+    ind = convert_result(predictions=predictions, categories=categories)[0]
     # st.write(f"{ind} -- {N}")
 
     COLOR = colors[categories[ind]]
@@ -235,19 +263,18 @@ def predict_gender(predictions, categories):
     return gender
 
 ## =====================================
-    
 def main(): 
-    # side_image = Image.open()
+    # side_image = Image.open("image/user_male_icon.png")
     # with st.sidebar:
-        # st.image(side_image, width=300)
-    st.sidebar.subheader("Menu")
-    website_menu = st.sidebar.selectbox("Menu", ("Emotion Recognition", "About my project"))
+    #     st.image(side_image, width=250)
+    st.sidebar.header("Menu")
+    website_menu = st.sidebar.selectbox("Menu", ("Emotion Recognition", "Dataset for training","About Me"))
     st.set_option('deprecation.showfileUploaderEncoding', False)
     
     if website_menu == "Emotion Recognition":
         st.sidebar.subheader("Model")
         model_type = st.sidebar.selectbox("Which type of present do you like?", ("mfccs", ""))
-        em3 = em6 = em7 = gender = False
+        em3 = em7 = gender = False
         st.sidebar.subheader("Setting")
         st.markdown("## Upload the file")
         with st.container():
@@ -280,7 +307,12 @@ def main():
                         st.audio("test.wav", format='audio/wav', start_time=0)
                         path =  "test.wav"
                         audio_file = "test"
-            with col2:
+            # with col2:
+            #     isRecord = st.button(on_click=recording, label="Click to Record")
+            #     if isRecord == True:
+            #         st.markdown("record")
+            #         audio_file = "test"
+            with st.container():
                 if audio_file is not None:
                     fig = plt.figure(figsize=(10,2))
                     fig.set_facecolor('#d1d1e0')
@@ -293,9 +325,11 @@ def main():
                     plt.gca().axes.spines["top"].set_visible(False)
                     plt.gca().axes.spines["bottom"].set_visible(False)
                     plt.gca().axes.set_facecolor('#d1d1e0')
-                    st.write(fig)
+                    st.write(fig) 
                 else:
-                    pass
+                    pass      
+            
+            
         if model_type == "mfccs":
             em3 = st.sidebar.checkbox("3 emotions")
             em7 = st.sidebar.checkbox("7 emotions", True)
@@ -310,6 +344,7 @@ def main():
         if audio_file is not None:
             st.markdown("## Analyzing...")
             if not audio_file == "test":
+                st.sidebar.subheader("Your audio")
                 st.sidebar.metric(label="Audio file", value=audio_file.name, delta=audio_file.size, delta_color="normal")
             with st.container():
                 col1, col2 = st.columns(2)
@@ -336,56 +371,71 @@ def main():
             if model_type == "mfccs":
                 st.markdown("## Predictions")
                 with st.container():
-                    col1, col2, col3, col4 = st.columns(4)
+                    col1, col2, col3 = st.columns(3)
                     
                     model_ = model
                     mfccs_ = get_mfccs(path)
                     pred_ = model_.predict(mfccs_)[0]
                     
-                    # with col1: 
-                        # if em3:
-                        #     pos = pred[3] + pred[5] * .5
-                        #     neu = pred[2] + pred[5] * .5 + pred[4] * .5
-                        #     neg = pred[0] + pred[1] + pred[4] * .5
-                        #     data3 = np.array([pos, neu, neg])
-                        #     txt = "MFCCs\n" + get_title(data3, CAT3)
-                        #     fig = plt.figure(figsize=(5, 5))
-                        #     COLORS = color_dict(COLOR_DICT)
-                        #     plot_colored_polar(fig, predictions=data3, categories=CAT3,
-                        #                        title=txt, colors=COLORS)
-                        #     st.write(fig)
-                    with col3:
-                        if em7:
-                            txt = "MFCCs\n" + get_title(pred_, CAT14)
+                    with col1: 
+                        if em3:
+                            data3 = convert_data_list(pred_, CAT3)
+                            txt = "MFCCs\n" + get_title(data3, CAT3)
+                            fig = plt.figure(figsize=(5, 5))
+                            COLORS = color_dict(COLOR_DICT_CAT3)
+                            plot_colored_polar(fig, predictions=data3, categories=CAT3, title=txt, colors=COLORS)
+                            st.write(fig)
+                    with col2:
+                        if em7:                    
+                            data7 = convert_data_list(pred_, CAT7)
+                            txt = "MFCCs\n" + get_title(pred_, CAT7)
                             fig3 = plt.figure(figsize=(5, 5))
-                            COLORS = color_dict(COLOR_DICT)
-                            plot_colored_polar(fig3, predictions=pred_, categories=CAT14,
-                                               title=txt, colors=COLORS)
+                            COLORS = color_dict(COLOR_DICT_CAT7)
+                            plot_colored_polar(fig3, predictions=data7, categories=CAT7, title=txt, colors=COLORS)
                             st.write(fig3)
-                    with col4:
+                    with col3:
                         if gender:
                             with st.spinner('Wait for it...'):
                                 gender = predict_gender(pred_, CAT14)
                                 side_image = Image.open(gender)
-                                st.image(side_image, width=250)
-                                
-    elif website_menu == "Our team":
-        st.subheader("Our team")
+                                st.image(side_image, width=300)
+    elif website_menu == "Dataset for training":
+        dataset = pd.read_csv("Data_path_3type.csv")
+        dataset.columns = ['Label', 'Source', 'Path/Filename']  
+        st.header("My Training Dataset")
+        st.write(dataset)  
+        
+        
+        data_options = dataset['Path/Filename'].to_list()
+        option = st.multiselect("Which file you want see?", data_options, ['data/RAVDESS/Actor_01/03-01-02-01-02-01-01.wav'])
+        
+        fig = plt.figure(figsize=(20, 5), facecolor='#d1d1e0') 
+        for opt in option:
+            filename = opt
+            opt = opt.split('/')[3]
+            X, sampling_rate = librosa.load(filename
+                              ,res_type='kaiser_fast'
+                              ,duration=4
+                              ,sr=44100)
+            opt_value = np.mean(librosa.feature.mfcc(y=X, sr=sampling_rate, n_mfcc=13), axis=0)
+            plt.plot(opt_value, label=opt)
+        
+        plt.legend()
+        plt.grid(axis='y', linestyle='-')
+        st.subheader("Line-chart Comparing Audio")
+        st.write(fig)
+        
+    elif website_menu == "About Me":
+        st.subheader("About Me")
         st.balloons()
         col1, col2 = st.columns([3, 2])
         with col1:
-            st.info("maria.s.startseva@gmail.com")
-            st.info("talbaram3192@gmail.com")
-            st.info("asherholder123@gmail.com")
+            st.info("tamhltgcs18442@fpt.edu.vn")
+            st.markdown(f""":speech_balloon: [Tam Huynh](https://www.linkedin.com/in/owenhuynh)""",
+                        unsafe_allow_html=True)
         with col2:
-            liimg = Image.open("images/LI-Logo.png")
+            liimg = Image.open("image/user_male_icon.png")
             st.image(liimg)
-            st.markdown(f""":speech_balloon: [Maria Startseva](https://www.linkedin.com/in/maria-startseva)""",
-                        unsafe_allow_html=True)
-            st.markdown(f""":speech_balloon: [Tal Baram](https://www.linkedin.com/in/tal-baram-b00b66180)""",
-                        unsafe_allow_html=True)
-            st.markdown(f""":speech_balloon: [Asher Holder](https://www.linkedin.com/in/asher-holder-526a05173)""",
-                        unsafe_allow_html=True)
     else:
         st.header("Thank you for coming to my website")
         
